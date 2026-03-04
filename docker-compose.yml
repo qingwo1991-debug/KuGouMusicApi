@@ -1,0 +1,9 @@
+services:
+  kugou-api:
+    image: ghcr.io/${GHCR_OWNER:-makcre}/kugoumusicapi:latest
+    container_name: kugoumusicapi
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env

@@ -113,6 +113,51 @@ $ $Env:KUGOU_API_PROXY='http://127.0.0.1:7890'; npm run dev
 $ node app.js --proxy=http://127.0.0.1:7890
 ```
 
+## Docker Compose 部署（GHCR 镜像）
+
+项目已支持通过 GitHub Actions 自动构建并发布 Docker 镜像到 GHCR。
+
+### GitHub Actions 构建镜像
+
+- Workflow: `.github/workflows/docker-image.yml`
+- 触发条件: push 到 `main` 或 push `v*` tag
+- 镜像地址: `ghcr.io/<owner>/kugoumusicapi:latest`
+
+> 若仓库公开并且 GHCR 包也设置为公开，本地可直接拉取镜像。
+
+### 本地运行
+
+1. 复制环境变量文件:
+
+```shell
+$ cp .env.example .env
+```
+
+2. 如需指定镜像拥有者，设置 `GHCR_OWNER`（默认 `makcre`）:
+
+```shell
+$ export GHCR_OWNER=makcre
+```
+
+3. 拉取并启动:
+
+```shell
+$ docker compose pull
+$ docker compose up -d
+```
+
+4. 查看日志:
+
+```shell
+$ docker compose logs -f
+```
+
+5. 停止服务:
+
+```shell
+$ docker compose down
+```
+
 ## Vercel 部署
 
 ### 操作方法
