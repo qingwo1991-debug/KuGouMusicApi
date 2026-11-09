@@ -2,9 +2,10 @@ FROM node:lts-alpine
 
 RUN apk add --no-cache tini
 
-RUN corepack enable
-
 ENV NODE_ENV=production
+
+# node:lts-alpine 已移除 corepack，改用 npm 安装 pnpm
+RUN npm install -g pnpm@10
 
 WORKDIR /app
 
