@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>酷狗扫码登录</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 32px 28px;
+      width: 320px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    h1 { font-size: 20px; color: #1e3c72; margin-bottom: 8px; }
+    .sub { font-size: 13px; color: #888; margin-bottom: 20px; }
+    .qr-box {
+      width: 220px; height: 220px;
+      margin: 0 auto 16px;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #fafafa;
+    }
+    .qr-box img { width: 100%; height: 100%; object-fit: contain; }
+    .status { font-size: 14px; color: #555; min-height: 20px; margin-bottom: 12px; }
+    .status.ok { color: #16a34a; }
+    .status.err { color: #dc2626; }
+    button {
+      background: #1e3c72;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+    }
+    button:hover { background: #2a5298; }
+    .back { margin-top: 16px; font-size: 12px; }
+    .back a { color: #2a5298; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>酷狗扫码登录</h1>
+    <p class="sub">打开「酷狗音乐」App，扫描下方二维码</p>
+    <div class="qr-box">
+      <img id="qrImg" alt="二维码加载中…" />
+    </div>
+    <div class="status" id="statusText">二维码加载中…</div>
+    <button id="refreshBtn">刷新二维码</button>
+    <div class="back"><a href="./">← 返回首页</a></div>
+  </div>
+
+  <script>
+    let key = '';
+    let timer = null;
+
+    function setStatus(text, cls) {
+      const el = document.getElementById('statusText');
+      el.textContent = text;
+      el.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    function stopPoll() {
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+
+    async function loadQr() {
+      stopPoll();
+      document.getElementById('refreshBtn').style.display = 'none';
+      document.getElementById('qrImg').src = '';
+      setStatus('二维码加载中…');
+      try {
+        const r = await fetch('/login/qr/key').then((res) => res.json());
+        if (r.data && r.data.qrcode_img && r.data.qrcode) {
+          key = r.data.qrcode;
+          document.getElementById('qrImg').src = r.data.qrcode_img;
+          setStatus('请用酷狗音乐 App 扫码');
+          startPoll();
+        } else {
+          setStatus('二维码获取失败，请刷新重试', 'err');
+          document.getElementById('refreshBtn').style.display = 'inline-block';
+        }
+      } catch (e) {
+        setStatus('网络错误：' + e.message, 'err');
+        document.getElementById('refreshBtn').style.display = 'inline-block';
+      }
+    }
+
+    function startPoll() {
+      stopPoll();
+      timer = setInterval(async () => {
+        try {
+          const r = await fetch('/login/qr/check?key=' + encodeURIComponent(key)).then((res) => res.json());
+          const st = r.data && r.data.status;
+          if (st === 4) {
+            stopPoll();
+            setStatus('登录成功！token 已写入 Cookie', 'ok');
+          } else if (st === 2) {
+            setStatus('已扫码，请在手机上确认');
+          } else if (st === 0) {
+            stopPoll();
+            setStatus('二维码已过期', 'err');
+            document.getElementById('refreshBtn').style.display = 'inline-block';
+          } else {
+            setStatus('等待扫码…');
+          }
+        } catch (e) {
+          /* 轮询失败静默，等待下一轮 */
+        }
+      }, 2500);
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadQr);
+    loadQr();
+  </script>
+</body>
+</html>
