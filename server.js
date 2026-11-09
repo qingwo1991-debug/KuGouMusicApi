@@ -317,8 +317,14 @@ async function consturctServer(moduleDefs) {
    */
   app.use(
     cache('2 minutes', (req, res) => {
-      // 账号管理接口是动态/带登录态的，不能缓存
-      if (req.path.startsWith('/account/')) return false;
+      // 账号管理/歌单同步/个性化推荐等动态接口不能缓存
+      if (
+        req.path.startsWith('/account/') ||
+        req.path.startsWith('/playlist/sync') ||
+        req.path === '/recommend'
+      ) {
+        return false;
+      }
       return res.statusCode === 200;
     })
   );
