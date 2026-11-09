@@ -315,7 +315,13 @@ async function consturctServer(moduleDefs) {
    * 绕过缓存的方式：在请求 URL 后附加不同的 timestamp 参数，
    * 例如: /personal/fm?timestamp=1691256061923
    */
-  app.use(cache('2 minutes', (_, res) => res.statusCode === 200));
+  app.use(
+    cache('2 minutes', (req, res) => {
+      // 账号管理接口是动态/带登录态的，不能缓存
+      if (req.path.startsWith('/account/')) return false;
+      return res.statusCode === 200;
+    })
+  );
 
   /**
    * ============================================================
