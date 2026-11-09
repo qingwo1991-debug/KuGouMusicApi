@@ -110,7 +110,18 @@
           const st = r.data && r.data.status;
           if (st === 4) {
             stopPoll();
-            setStatus('登录成功！token 已写入 Cookie', 'ok');
+            const uid = r.data && r.data.userid;
+            const tok = r.data && r.data.token;
+            if (uid && tok) {
+              try {
+                await fetch(
+                  '/account/save?userid=' + encodeURIComponent(uid) +
+                  '&token=' + encodeURIComponent(tok) +
+                  '&nickname=' + encodeURIComponent('酷狗' + String(uid).slice(-4))
+                );
+              } catch (e) { /* 保存失败不影响登录 */ }
+            }
+            setStatus('登录成功！已保存账号，可到「账号管理」切换', 'ok');
           } else if (st === 2) {
             setStatus('已扫码，请在手机上确认');
           } else if (st === 0) {
