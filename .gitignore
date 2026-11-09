@@ -25,3 +25,5 @@ bin/*
 *.sln
 *.sw?
 .env
+# Runtime data (downloads, sessions, DB)
+.kugou

@@ -1,9 +1,19 @@
 services:
   kugou-api:
-    image: ghcr.io/${GHCR_OWNER:-makcre}/kugoumusicapi:latest
+    image: ghcr.io/qingwo1991-debug/kugoumusicapi:latest
     container_name: kugoumusicapi
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "5301:3000"
     env_file:
       - .env
+    environment:
+      # AI 推荐引擎配置（可选，默认关闭）
+      - AI_ENABLED=false
+      - AI_API_URL=
+      - AI_API_KEY=
+      - AI_MODEL=
+      - AI_MAX_TOKENS=512
+      - AI_TEMPERATURE=0.7
+    volumes:
+      - ./.kugou:/app/.kugou

@@ -113,6 +113,57 @@ $ $Env:KUGOU_API_PROXY='http://127.0.0.1:7890'; npm run dev
 $ node app.js --proxy=http://127.0.0.1:7890
 ```
 
+## OpenClaw 自动化脚本
+
+新增脚本：`scripts/kugou_assistant.js`，用于自动化登录、状态检查、续期、每日 VIP、搜索下载与可选上传。
+
+### 常用命令
+
+```shell
+# 1) 生成微信扫码二维码（会输出 uuid、扫码链接、二维码图片文件路径）
+$ npm run kugou:assistant -- wx-login-init
+
+# 2) 扫码后等待登录完成（自动换取 token、注册设备 dfid、刷新登录）
+$ npm run kugou:assistant -- wx-login-wait --timeout 180
+
+# 3) 检查登录状态
+$ npm run kugou:assistant -- status
+
+# 4) 刷新登录（续期）
+$ npm run kugou:assistant -- refresh
+
+# 5) 每日领取 VIP（默认当天，自动执行 upgrade）
+$ npm run kugou:assistant -- claim-vip
+
+# 6) 查看酷狗云盘列表
+$ npm run kugou:assistant -- cloud-list --page 1 --pagesize 30
+
+# 7) 下载酷狗云盘歌曲（hash 来自 cloud-list）
+$ npm run kugou:assistant -- cloud-download --hash <HASH> --name '云盘歌曲名'
+
+# 8) 搜索（公共搜索源）
+$ npm run kugou:assistant -- search --keyword 海阔天空 --pagesize 5
+
+# 9) 下载最高可用音质（自动挑选可用最高码率）
+$ npm run kugou:assistant -- download --keyword 海阔天空 --singer BEYOND
+
+# 10) 下载后执行上传命令（通过环境变量 FILE_PATH / FILE_NAME 传递文件信息）
+$ npm run kugou:assistant -- download --keyword 海阔天空 --singer BEYOND --upload-cmd 'rclone copy "$FILE_PATH" your-remote:music/'
+
+# 11) 下载后直接上传到 AList（openalist:5244，不经过 alist-encrypt）
+# 可用环境变量：ALIST_USER / ALIST_PASS / ALIST_URL / ALIST_DIR
+$ ALIST_USER='admin' ALIST_PASS='你的密码' npm run kugou:assistant -- download --keyword 海阔天空 --singer BEYOND --alist-upload --alist-url http://127.0.0.1:5244 --alist-dir /156天翼云盘/kugou-openalist
+```
+
+### 说明
+
+- 登录态默认保存到 `./.kugou/session.json`
+- 下载目录默认 `./.kugou/downloads`
+- `--alist-upload` 走 AList 官方 API：`/api/auth/login` + `/api/fs/put`
+- 默认 AList 上传目录是 ` /156天翼云盘/kugou-openalist `，与 `alist-encrypt` 路径隔离
+- 当前文档与仓库实现仅包含“获取云盘列表/获取云盘歌曲 URL”，未提供“上传到酷狗云盘”接口
+- 若需对接 OpenClaw，可直接把上面的命令作为任务命令调用
+
 ## Docker Compose 部署（GHCR 镜像）
 
 项目已支持通过 GitHub Actions 自动构建并发布 Docker 镜像到 GHCR。

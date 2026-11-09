@@ -134,7 +134,13 @@ async function consturctServer(moduleDefs) {
   app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
   // Cache
-  app.use(cache('2 minutes', (_, res) => res.statusCode === 200));
+  // 注意：/api/ 下的所有接口（状态、登录、VIP、播放、收藏、历史等）都不缓存，避免状态滞后
+  app.use(
+    cache('2 minutes', (req, res) => {
+      if (req.path.startsWith('/api/')) return false;
+      return res.statusCode === 200;
+    })
+  );
 
   const moduleDefinitions = moduleDefs || (await getModulesDefinitions(path.join(__dirname, 'module'), {}));
 
@@ -212,6 +218,12 @@ async function consturctServer(moduleDefs) {
       }
     });
   }
+
+  /**
+   * Web App Routes (搜索、播放、登录、VIP等)
+   */
+  const webRoutes = require('./web_routes');
+  app.use(webRoutes);
 
   return app;
 }
