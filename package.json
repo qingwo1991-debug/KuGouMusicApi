@@ -1,6 +1,6 @@
 {
   "name": "kugoumusicapi",
-  "version": "1.5.1",
+  "version": "1.6.3",
   "description": "",
   "main": "main.js",
   "bin": "./app.js",
@@ -20,12 +20,12 @@
   "scripts": {
     "dev": "nodemon --config nodemon.json index.js",
     "start": "node app.js",
-    "kugou:assistant": "node scripts/kugou_assistant.js",
     "pkgwin": "pkg . -t node14-win-x64 -C GZip -o bin/app_win --no-bytecode",
     "pkglinux": "pkg . -t node14-linux-x64 -C GZip -o bin/app_linux --no-bytecode",
-    "pkglinux-arm64": "pkg . -t node14-linux-arm64 -C GZip -o bin/app_linux --no-bytecode",
+    "pkglinux-arm64": "pkg . -t node14-linux-arm64 -C GZip -o bin/app_linux_arm64 --no-bytecode",
     "pkgmacos": "pkg . -t node14-macos-x64 -C GZip -o bin/app_macos --no-bytecode",
-    "pkgjs": "esbuild index.js --bundle --minify --outfile=bin/api_js/app.js --platform=node && mkdir -p bin/api_js/util bin/api_js/module && esbuild util/*.js --bundle --minify --outdir=bin/api_js/util --platform=node && esbuild module/*.js --bundle --minify --outdir=bin/api_js/module --platform=node"
+    "pkgmacos-arm64": "pkg . -t node16-macos-arm64 -C GZip -o bin/app_macos_arm64 --no-bytecode",
+    "pkgjs": "tsdown"
   },
   "engines": {
     "node": ">=12"
@@ -43,13 +43,12 @@
     "@types/node": "^18.11.9",
     "@types/pako": "^2.0.0",
     "@types/qrcode": "^1.5.0",
-    "esbuild": "^0.25.3",
     "nodemon": "^3.1.10",
     "pkg": "^5.8.1",
     "prettier": "^2.7.1",
-    "sql.js": "^1.14.1",
     "ts-node": "^10.9.1",
-    "typescript": "^4.9.3"
+    "tsdown": "^0.22.3",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "axios": "^1.1.3",
@@ -57,8 +56,9 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
+    "form-data": "^4.0.0",
     "mysql2": "^3.22.0",
-    "node-forge": "^1.3.3",
+    "node-forge": "1.4.1",
     "pako": "^2.1.0",
     "qrcode": "^1.5.3",
     "safe-decode-uri-component": "^1.2.1",

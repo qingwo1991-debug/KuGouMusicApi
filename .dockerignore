@@ -4,11 +4,8 @@ node_modules
 .kugou
 .env
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 .DS_Store
 .vscode
 .idea
+dist
+bin
