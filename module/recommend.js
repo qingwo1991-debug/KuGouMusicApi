@@ -1,8 +1,9 @@
 // 个性化推荐（基于本地 MySQL 播放/收藏记忆，见根目录 recommend_engine.js）
 // 路由: /recommend
-module.exports = () => {
+module.exports = (params) => {
+  const userid = String((params && params.cookie && params.cookie.userid) || '');
   return require('../recommend_engine')
-    .generateRecommendations()
+    .generateRecommendations(userid)
     .then((rec) => ({
       status: 200,
       body: { code: 0, ...rec },

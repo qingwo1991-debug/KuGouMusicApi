@@ -65,6 +65,13 @@ const DECAY = {
 let pool = null;
 function getPool() { if (!pool) pool = mysql.createPool(DB); return pool; }
 
+// 确保某 userid 的画像行存在（幂等）
+async function ensureProfile(userid) {
+  try {
+    await getPool().query(`INSERT IGNORE INTO user_profile (userid) VALUES (?)`, [userid || '']);
+  } catch (e) { /* ignore */ }
+}
+
 // ===== 输入校验 =====
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function sanitizeInput(str, maxLen = 255) {
@@ -140,13 +147,13 @@ async function initDB() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
     await conn.query(`CREATE TABLE IF NOT EXISTS user_profile (
-      id INT PRIMARY KEY DEFAULT 1,
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      userid VARCHAR(32) NOT NULL DEFAULT '',
       total_plays INT DEFAULT 0,
       total_listen INT DEFAULT 0,
-      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_userid (userid)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-
-    await conn.query(`INSERT IGNORE INTO user_profile (id) VALUES (1)`);
 
     // ===== 记忆向量表（核心） =====
     await conn.query(`CREATE TABLE IF NOT EXISTS memory_vectors (
@@ -171,12 +178,26 @@ async function initDB() {
         cols: [
           // 酷狗播放接口必须带 album_audio_id(mixsongid)，历史歌单需要这个字段才能播放
           { name: 'mixsongid', sql: "ALTER TABLE play_history ADD COLUMN mixsongid INT DEFAULT 0 AFTER cid" },
+          { name: 'userid', sql: "ALTER TABLE play_history ADD COLUMN userid VARCHAR(32) NOT NULL DEFAULT '' AFTER id" },
         ],
       },
       {
         table: 'favorites',
         cols: [
           { name: 'mixsongid', sql: "ALTER TABLE favorites ADD COLUMN mixsongid INT DEFAULT 0 AFTER is_new" },
+          { name: 'userid', sql: "ALTER TABLE favorites ADD COLUMN userid VARCHAR(32) NOT NULL DEFAULT '' AFTER id" },
+        ],
+      },
+      {
+        table: 'memory_vectors',
+        cols: [
+          { name: 'userid', sql: "ALTER TABLE memory_vectors ADD COLUMN userid VARCHAR(32) NOT NULL DEFAULT '' AFTER id" },
+        ],
+      },
+      {
+        table: 'user_profile',
+        cols: [
+          { name: 'userid', sql: "ALTER TABLE user_profile ADD COLUMN userid VARCHAR(32) NOT NULL DEFAULT '' AFTER id" },
         ],
       },
     ]) {
@@ -192,6 +213,14 @@ async function initDB() {
         }
       }
     }
+
+    // user_profile 旧表迁移：id 改自增 + userid 唯一索引（幂等，失败忽略）
+    try {
+      await conn.query(`ALTER TABLE user_profile MODIFY id BIGINT AUTO_INCREMENT`);
+    } catch (e) { /* already auto_increment */ }
+    try {
+      await conn.query(`ALTER TABLE user_profile ADD UNIQUE KEY uk_userid (userid)`);
+    } catch (e) { /* already exists */ }
 
     conn.release();
     console.log('[recommend] Memory system initialized');
@@ -447,7 +476,7 @@ async function removeFavorite(hash) {
   } catch { return false; }
 }
 
-async function getHistory(limit = 100) {
+async function getHistory(limit = 100, userid = '') {
   try {
     // 按 hash+歌名 去重合并：同一首歌只返回一条，附带播放次数 play_count 与最近播放时间
     const [rows] = await getPool().query(
@@ -455,9 +484,10 @@ async function getHistory(limit = 100) {
               MAX(play_time) AS play_time, COUNT(*) AS play_count,
               MAX(mixsongid) AS mixsongid
        FROM play_history
+       WHERE userid = ?
        GROUP BY hash, songname, singername, album_name, duration
        ORDER BY play_time DESC
-       LIMIT ?`, [limit]
+       LIMIT ?`, [userid, limit]
     );
     return rows.map((r) => ({
       ...r,
@@ -467,9 +497,9 @@ async function getHistory(limit = 100) {
   } catch (e) { console.error('[getHistory]', e.message); return []; }
 }
 
-async function getFavorites() {
+async function getFavorites(userid = '') {
   try {
-    const [rows] = await getPool().query(`SELECT * FROM favorites ORDER BY favorited_at DESC`);
+    const [rows] = await getPool().query(`SELECT * FROM favorites WHERE userid = ? ORDER BY favorited_at DESC`, [userid]);
     return rows;
   } catch { return []; }
 }
@@ -535,12 +565,13 @@ decayAllMemories();
 
 // ===== AI 推荐评分系统 =====
 
-async function generateRecommendations() {
+async function generateRecommendations(userid = '') {
   try {
     const pool = getPool();
+    await ensureProfile(userid);
 
     // 获取用户画像
-    const [[profile]] = await pool.query(`SELECT total_plays, total_listen FROM user_profile WHERE id = 1`);
+    const [[profile]] = await pool.query(`SELECT total_plays, total_listen FROM user_profile WHERE userid = ?`, [userid]);
     const totalPlays = profile?.total_plays || 0;
     if (totalPlays < 3) {
       return {
@@ -555,7 +586,7 @@ async function generateRecommendations() {
     // ===== 读取记忆向量 =====
     const [memories] = await pool.query(
       `SELECT vector_type, vector_key, score, play_count, total_listen, last_played
-       FROM memory_vectors WHERE score > 0 ORDER BY vector_type, score DESC`
+       FROM memory_vectors WHERE userid = ? AND score > 0 ORDER BY vector_type, score DESC`, [userid]
     );
 
     // 按类型分组
@@ -576,27 +607,27 @@ async function generateRecommendations() {
     // 获取收藏歌手列表
     const [favSingers] = await pool.query(
       `SELECT singername, COUNT(*) as cnt FROM favorites
-       WHERE singername != '' AND singername != '未知'
-       GROUP BY singername ORDER BY cnt DESC LIMIT 5`
+       WHERE userid = ? AND singername != '' AND singername != '未知'
+       GROUP BY singername ORDER BY cnt DESC LIMIT 5`, [userid]
     );
 
     // 获取高热歌曲
     const [hotSongs] = await pool.query(
       `SELECT songname, singername, language, heat, is_new
        FROM play_history
-       WHERE heat > ?
+       WHERE userid = ? AND heat > ?
        ORDER BY heat DESC
        LIMIT 10`,
-      [HEAT_FLAME]
+      [userid, HEAT_FLAME]
     );
 
     // 获取新歌
     const [newSongs] = await pool.query(
       `SELECT songname, singername, album_name, language, play_time
        FROM play_history
-       WHERE is_new = 1
+       WHERE userid = ? AND is_new = 1
        ORDER BY play_time DESC
-       LIMIT 10`
+       LIMIT 10`, [userid]
     );
 
     // ===== 生成推荐原因 =====
@@ -660,13 +691,14 @@ async function generateRecommendations() {
 
 // ===== 获取用户记忆画像 =====
 
-async function getMemoryProfile() {
+async function getMemoryProfile(userid = '') {
   try {
     const pool = getPool();
+    await ensureProfile(userid);
     const [vectors] = await pool.query(
       `SELECT vector_type, vector_key, score, play_count, last_played
-       FROM memory_vectors WHERE score > 2
-       ORDER BY vector_type, score DESC`
+       FROM memory_vectors WHERE userid = ? AND score > 2
+       ORDER BY vector_type, score DESC`, [userid]
     );
 
     const result = {};
@@ -680,7 +712,7 @@ async function getMemoryProfile() {
       });
     }
 
-    const [[profile]] = await pool.query(`SELECT * FROM user_profile WHERE id = 1`);
+    const [[profile]] = await pool.query(`SELECT * FROM user_profile WHERE userid = ?`, [userid]);
     result._profile = profile;
 
     return result;
@@ -693,7 +725,14 @@ module.exports = {
   removeFavorite,
   getHistory,
   getFavorites,
-  getProfile: () => getPool().then(p => p.query(`SELECT * FROM user_profile WHERE id = 1`).then(([r]) => r[0] || {})).catch(() => ({})),
+  getProfile: async (userid = '') => {
+    try {
+      const [[r]] = await getPool().query(`SELECT * FROM user_profile WHERE userid = ?`, [userid]);
+      return r || {};
+    } catch {
+      return {};
+    }
+  },
   generateRecommendations,
   getMemoryProfile,
   decayAllMemories,
